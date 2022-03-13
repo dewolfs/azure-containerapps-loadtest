@@ -29,7 +29,7 @@ resource thebank 'Microsoft.App/containerApps@2022-01-01-preview' = {
           env: [
             {
               name: 'APPINSIGHTS_INSTRUMENTATIONKEY'
-              value: 'ffc09cbe-a704-4a55-acae-a5dfb5fcfad8'
+              value: '62426cad-2451-4771-895a-149f38d185ce'
             }
           ]
         }
