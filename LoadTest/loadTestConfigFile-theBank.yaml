@@ -1,0 +1,7 @@
+version: v0.1
+testName: load_test_the_bank
+testPlan: the_bank_test_plan.jmx
+description: 'The Bank Test Run using GitHub Actions'
+engineInstances: 1
+failureCriteria:
+  - avg(response_time_ms) > 500

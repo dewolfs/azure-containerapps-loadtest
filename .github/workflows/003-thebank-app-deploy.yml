@@ -1,0 +1,91 @@
+name: 003-thebank-app-deploy
+
+on:
+  workflow_dispatch:
+
+env:
+  LOAD_TEST_RESOURCE_GROUP: "rg-container-apps-load-test-01"
+  LOAD_TEST_RESOURCE_US: "load-test-eastus"
+  LOAD_TEST_RESOURCE_AUSTRALIA: "load-test-australiaeast"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  thebank-app-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GitHub Actions 
+        uses: actions/checkout@v2
+
+      - name: 'Az CLI login'
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: 'Deploy App'
+        run: |
+          az deployment group create \
+              --resource-group "${{ env.LOAD_TEST_RESOURCE_GROUP }}" \
+              --template-file ./deploy/bicep/thebank-app-deploy.bicep \
+              --parameters containerRegistryPassword=${{ secrets.REGISTRY_PASSWORD }}
+
+  load-test:
+    runs-on: ubuntu-latest
+    needs: thebank-app-deploy
+    steps:
+      - name: Checkout GitHub Actions 
+        uses: actions/checkout@v2
+
+      - name: 'Az CLI login'
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+#      - name: 'Get Container Apps FQDN'
+#        run: |
+#          az extension add --source https://workerappscliextension.blob.core.windows.net/azure-cli-extension/containerapp-0.2.0-py2.py3-none-any.whl --yes
+#          echo "ACA_URL=$(az containerapp list --query "[?contains(name, 'bank')].[configuration.ingress.fqdn]" --output tsv)" >> $GITHUB_ENV
+
+
+      - name: 'Get Container Apps FQDN'
+        run: |
+          az extension add --name resource-graph
+          echo "ACA_URL=$(az rest --url "https://management.azure.com/subscriptions/bc1d24d7-eb31-4f7b-ba09-95d50995b27f/resourceGroups/rg-container-apps-load-test-01/providers/Microsoft.App/containerApps/thebank?api-version=2022-01-01-preview" | jq ".properties.configuration.ingress.fqdn" -r)" >> $GITHUB_ENV
+
+      - name: 'Get var'
+        run: |
+          echo "${{ env.ACA_URL }}"
+
+      - name: 'Azure Load Testing US'
+        uses: azure/load-testing@v1
+        with:
+          loadTestConfigFile: 'LoadTest/loadTestConfigFile-theBank.yaml'
+          loadTestResource: ${{ ENV.LOAD_TEST_RESOURCE_US }}
+          resourceGroup: ${{ ENV.LOAD_TEST_RESOURCE_GROUP }}
+          env: |
+            [
+              {
+                "name": "thebank",
+                "value": "${{ env.ACA_URL }}"
+              }
+            ]
+
+      - name: 'Azure Load Testing AUSTRALIA'
+        uses: azure/load-testing@v1
+        with:
+          loadTestConfigFile: 'LoadTest/loadTestConfigFile-theBank.yaml'
+          loadTestResource: ${{ ENV.LOAD_TEST_RESOURCE_AUSTRALIA }}
+          resourceGroup: ${{ ENV.LOAD_TEST_RESOURCE_GROUP }}
+          env: |
+            [
+              {
+                "name": "thebank",
+                "value": "${{ env.ACA_URL }}"
+              }
+            ]
